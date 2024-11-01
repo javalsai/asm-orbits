@@ -22,14 +22,16 @@ section .bss
 
 section .rodata
     ONE: dq 1
-    UNIT: db ".."
+    UNIT: db "##"
 %define UNIT_SIZE 2
     NEWLINE: db 10
     SPACE: db " "
 
 section .data
     example_body_color: db 0x1b, "[1;35m"
-    example_body: db 59, 0, 0, 0, 0, 100
+    example_body:
+    dd 0.0, 0.0, 0.0, 0.0
+    db 30, 100
     dq example_body_color
     db 7
 
