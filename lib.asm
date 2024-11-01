@@ -38,7 +38,6 @@ print_body:
     mov r9, r15
 
     mov rax, r9
-    call get_normalization_ratio
     .print_body_loop_i:
         mov r10, r15
         inc r10
@@ -46,9 +45,8 @@ print_body:
 
         mov qword [qword_tmp], r10
         fild qword [qword_tmp]
-        fmul st0, st1
-        mov qword [qword_tmp], 2
-        fimul dword [qword_tmp]
+        fsub dword [HALF]
+        fimul dword [TWO]
         mov qword [qword_tmp], r15
         fisub dword [qword_tmp]
         fidiv dword [qword_tmp]
@@ -63,7 +61,6 @@ print_body:
         mov r11, r10
         mov r10, r15
         sub r10, r11
-        ;shr r11, 1
         jmp .print_body_j_align_tail
         .print_body_j_align:
             mov rax, OS_WRITE
@@ -119,11 +116,44 @@ sin_arccos:
 ; is simly the amount of lines)
 ;
 ; rax: of number
-get_normalization_ratio:
-    mov qword [qword_tmp], rax
-    fild qword [qword_tmp]
-    inc qword [qword_tmp]
-    fild qword [qword_tmp]
-    fdivp st1, st0
 
-    ret
+;get_normalization_ratio:
+;    mov qword [qword_tmp], rax
+;    fild qword [qword_tmp]
+;    inc qword [qword_tmp]
+;    fild qword [qword_tmp]
+;    fdivp st1, st0
+;
+;    ret
+
+; OR, we can shift everything half a unit under, like
+; 1/3, 2/3, 3/3 -> 1/3 - 1/6, 2/3 - 1/6, 3/3 - 1/6 =
+; 0.3, 0.6, 1   -> 0.1666666, 0.5,       0.8333333
+; and instead of looking like (doing a staircase)
+; ####
+; ########
+; ############
+; or
+; ###
+; ######
+; #########
+; looks like
+; ##
+; ######
+; ##########
+;get_shift_constant:
+;    ;fld1
+;    ;mov qword [qword_tmp], rax
+;    ;fild qword [qword_tmp]
+;    ;fdivp st1, st0
+;    ;mov qword [qword_tmp], 2
+;    ;fild qword [qword_tmp]
+;    ;fdivp st1, st0
+;
+;    mov dword [qword_tmp], __float32__(0.5)
+;    fld dword [qword_tmp]
+;
+;    ret
+
+; aaaand, unnecessary cuz if done in the proper moment is
+; just substracting 1/2 every time

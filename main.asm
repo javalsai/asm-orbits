@@ -1,9 +1,3 @@
-; nasm ...
-; ld ...
-
-;:set tabstop=2
-;:set shiftwidth=2
-
 %define OS_READ   0
 %define OS_WRITE  1
 %define OS_OPEN   2
@@ -22,6 +16,8 @@ section .bss
 
 section .rodata
     ONE: dq 1
+    TWO: dd 2
+    HALF: dd __float32__(0.5)
     UNIT: db "##"
 %define UNIT_SIZE 2
     NEWLINE: db 10
