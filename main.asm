@@ -28,18 +28,26 @@ section .rodata
     SPACE: db " "
 
 section .data
-    example_body_color: db 0x1b, "[1;35m"
-    example_body:
-    dd 0.0, 0.0, 0.0, 0.0
-    db 30, 100
-    dq example_body_color
-    db 7
+    blue_ansi_color: db 0x1b, "[1;34m"
+    yellow_ansi_color: db 0x1b, "[1;33m"
+    earth_body:
+        dd 20.0, 20.0, 10.0, 10.0
+        db 3, 100
+        dq blue_ansi_color
+        db 7
+    sun_body:
+        dd 10.0, 10.0, 0.0, 0.0
+        db 7, 100
+        dq yellow_ansi_color
+        db 7
 
 section .text
     global _start
 
 _start:
-    mov rax, example_body
+    mov rax, sun_body
+    call print_body
+    mov rax, earth_body
     call print_body
 
     mov rax, OS_EXIT

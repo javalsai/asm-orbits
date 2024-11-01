@@ -23,10 +23,8 @@ print_body:
     ; TODO: move to pos_X
 
     ; print escape color
-    pop rax
-    push rax
     mov rsi, [rax+PROP_BODY_ESCAPE]
-    mov rdx, [byte rax+PROP_BODY_ESCAPE_LEN]
+    movzx rdx, byte [rax+PROP_BODY_ESCAPE_LEN]
     mov rax, OS_WRITE
     mov rdi, FD_STDOUT
     syscall
