@@ -28,8 +28,6 @@ print_body:
     ; [rbp-8]: *body
     mov [rbp-8], rax
 
-    ; TODO: move to pos_X
-
     ; print escape color
     mov rsi, [rax+body.col]
     movzx rdx, byte [rax+body.col_len]
@@ -46,17 +44,6 @@ print_body:
     mov r9, r15
 
     .print_body_loop_i:
-        mov rax, [rbp-8]
-        mov rdi, qword [rax+body.pos_y] ; also loads pos_y
-        mov rsi, r15 ; v offset
-        sub rsi, r9
-        call go_pos_rdi2f_ln_rsi
-
-        mov rax, r15
-        sub rax, r9
-        mov rcx, 10
-        call print_rax_radix_rcx
-
         mov r10, r15
         inc r10
         sub r10, r9
@@ -79,21 +66,15 @@ print_body:
         mov r11, r10
         mov r10, r15
         sub r10, r11
-        jmp .print_body_j_align1_tail
-        .print_body_j_align1:
-            mov rax, OS_WRITE
-            mov rdi, FD_STDOUT
-            mov rsi, SPACE
-            mov rdx, 1
-            syscall
 
-            dec r10
-            .print_body_j_align1_tail:
-            cmp r10, 0
-            jg .print_body_j_align1
+        mov rax, [rbp-8]
+        mov rdi, qword [rax+body.pos_y] ; also loads pos_x
+        mov rsi, r15 ; v offset
+        sub rsi, r9  ; v offset
+        mov rdx, r10 ; h offset
+        call go_pos_rdi2f_ln_rsi_col_rdx
 
         pop r10
-        push r10
         jmp .print_body_loop_j_tail
         .print_body_loop_j:
             mov rax, OS_WRITE
@@ -106,23 +87,6 @@ print_body:
             .print_body_loop_j_tail:
             cmp r10, 0
             jg .print_body_loop_j
-
-        pop r10
-        mov r11, r10
-        mov r10, r15
-        sub r10, r11
-        jmp .print_body_j_align2_tail
-        .print_body_j_align2:
-            mov rax, OS_WRITE
-            mov rdi, FD_STDOUT
-            mov rsi, SPACE
-            mov rdx, 1
-            syscall
-
-            dec r10
-            .print_body_j_align2_tail:
-            cmp r10, 0
-            jg .print_body_j_align2
 
         ; todo: remove and just go to pos
         mov rax, OS_WRITE
@@ -150,7 +114,8 @@ sin_arccos:
 
 ; go to pos in rdi (x:y, 32floats, concat'd)
 ; with a verticall offset of rsi
-go_pos_rdi2f_ln_rsi:
+go_pos_rdi2f_ln_rsi_col_rdx:
+    push rdx
     push rsi
     push rdi
     ; low -> high addrs
@@ -179,6 +144,7 @@ go_pos_rdi2f_ln_rsi:
     fistp qword [rsp-8]
     mov rax, [rsp-8]
     inc rax
+    add rax, qword [rsp+16]
     mov rcx, 10
     call print_rax_radix_rcx
         mov rax, OS_WRITE
@@ -189,6 +155,7 @@ go_pos_rdi2f_ln_rsi:
         syscall
     pop rdi
     pop rsi
+    pop rdx
     ret
 
 print_rax_radix_rcx:
