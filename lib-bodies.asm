@@ -1,11 +1,13 @@
-%define PROP_BODY_POS_X       0
-%define PROP_BODY_POS_Y       4
-%define PROP_BODY_VEL_X       8
-%define PROP_BODY_VEL_Y       12
-%define PROP_BODY_RADIUS      16
-%define PROP_BODY_MASS        17
-%define PROP_BODY_ESCAPE      18
-%define PROP_BODY_ESCAPE_LEN  26
+struc body
+    .pos_x   resd 1
+    .pos_y   resd 1
+    .vel_x   resd 1
+    .vel_y   resd 1
+    .radius  resb 1
+    .mass    resb 1
+    .col     resq 1
+    .col_len resb 1
+endstruc
 ; body = {
 ;   0  f32     pox_x, (in "units (L)")
 ;   4  f32     pos_y, (in "units (L)")
@@ -20,42 +22,57 @@
 ; rax: *body
 ; assuming the body is on proper position (no negative or "over-screen")
 print_body:
-    push rax
+    push rbp
+    mov rbp, rsp
+    sub rsp, 8
+    ; [rbp-8]: *body
+    mov [rbp-8], rax
+
     ; TODO: move to pos_X
 
     ; print escape color
-    mov rsi, [rax+PROP_BODY_ESCAPE]
-    movzx rdx, byte [rax+PROP_BODY_ESCAPE_LEN]
+    mov rsi, [rax+body.col]
+    movzx rdx, byte [rax+body.col_len]
     mov rax, OS_WRITE
     mov rdi, FD_STDOUT
     syscall
 
     ; render thing
-    mov qword [qword_tmp], 0x0107F ; round mode
-    fldcw [qword_tmp]
+    mov qword [rsp-8], 0x0107F ; round mode
+    fldcw [rsp-8]
 
-    pop rax
-    movzx r15, byte [rax+PROP_BODY_RADIUS]
+    mov rax, [rbp-8]
+    movzx r15, byte [rax+body.radius]
     mov r9, r15
 
-    mov rax, r9
     .print_body_loop_i:
+        mov rax, [rbp-8]
+        mov rdi, qword [rax+body.pos_y] ; also loads pos_y
+        mov rsi, r15 ; v offset
+        sub rsi, r9
+        call go_pos_rdi2f_ln_rsi
+
+        mov rax, r15
+        sub rax, r9
+        mov rcx, 10
+        call print_rax_radix_rcx
+
         mov r10, r15
         inc r10
         sub r10, r9
 
-        mov qword [qword_tmp], r10
-        fild qword [qword_tmp]
+        mov qword [rsp-8], r10
+        fild qword [rsp-8]
         fsub dword [HALF]
         fimul dword [TWO]
-        mov qword [qword_tmp], r15
-        fisub dword [qword_tmp]
-        fidiv dword [qword_tmp]
+        mov qword [rsp-8], r15
+        fisub dword [rsp-8]
+        fidiv dword [rsp-8]
         call sin_arccos
-        mov qword [qword_tmp], r15
-        fimul dword [qword_tmp]
-        fistp qword [qword_tmp]
-        mov r10, qword [qword_tmp]
+        mov qword [rsp-8], r15
+        fimul dword [rsp-8]
+        fistp qword [rsp-8]
+        mov r10, qword [rsp-8]
         dec r10
 
         push r10
@@ -107,6 +124,7 @@ print_body:
             cmp r10, 0
             jg .print_body_j_align2
 
+        ; todo: remove and just go to pos
         mov rax, OS_WRITE
         mov rdi, FD_STDOUT
         mov rsi, NEWLINE
@@ -117,6 +135,8 @@ print_body:
         cmp r9, 0
         jg .print_body_loop_i
 
+    mov rsp, rbp
+    pop rbp
     ret
 
 ; sin(arccos(x)) = sqrt(1 - x^2)
@@ -126,6 +146,84 @@ sin_arccos:
     fchs
     fiadd dword [ONE]
     fsqrt
+    ret
+
+; go to pos in rdi (x:y, 32floats, concat'd)
+; with a verticall offset of rsi
+go_pos_rdi2f_ln_rsi:
+    push rsi
+    push rdi
+    ; low -> high addrs
+    ; [ fy fy fy fy fx fx fx fx ] [ ...
+    ; [ sp sp sp sp sp sp sp sp ] [ ...
+    ;   ^^          +4            +8...
+        mov rax, OS_WRITE
+        mov rdi, FD_STDOUT
+        lea rsi, [ansi_home]
+        mov rdx, 2
+        syscall
+    fld dword [rsp+4]
+    fistp qword [rsp-8]
+    mov rax, [rsp-8]
+    inc rax
+    add rax, qword [rsp+8]
+    mov rcx, 10
+    call print_rax_radix_rcx
+        mov rax, OS_WRITE
+        mov rdi, FD_STDOUT
+        mov byte [rsp-8], ';'
+        lea rsi, [rsp-8]
+        mov rdx, 1
+        syscall
+    fld dword [rsp]
+    fistp qword [rsp-8]
+    mov rax, [rsp-8]
+    inc rax
+    mov rcx, 10
+    call print_rax_radix_rcx
+        mov rax, OS_WRITE
+        mov rdi, FD_STDOUT
+        mov byte [rsp-8], 'H'
+        lea rsi, [rsp-8]
+        mov rdx, 1
+        syscall
+    pop rdi
+    pop rsi
+    ret
+
+print_rax_radix_rcx:
+    push rbp
+    mov rbp, rsp
+
+    jmp .pdts_tail
+    .push_digits_to_stack:
+        xor rdx, rdx
+        div rcx ; ( rdx:rax + rdx' ) / _ = rax'
+        add rdx, '0'
+        push rdx ; push rem to stack
+        .pdts_tail:
+        test rax, rax
+        jnz .push_digits_to_stack
+
+    cmp rsp, rbp
+    jne .zero_case_tail
+    push '0'
+    .zero_case_tail:
+
+    ; reverse stack printing
+    .reverse_loop:
+        cmp rsp, rbp
+        je .reverse_tail
+        mov rax, OS_WRITE
+        mov rdi, FD_STDOUT
+        lea rsi, [rsp]
+        mov rdx, 1
+        syscall
+        add rsp, 8
+        jmp .reverse_loop
+        .reverse_tail:
+
+    pop rbp
     ret
 
 ; iterating through lines of a 3 long body would do
@@ -138,10 +236,10 @@ sin_arccos:
 ; rax: of number
 
 ;get_normalization_ratio:
-;    mov qword [qword_tmp], rax
-;    fild qword [qword_tmp]
-;    inc qword [qword_tmp]
-;    fild qword [qword_tmp]
+;    mov qword [rsp-8], rax
+;    fild qword [rsp-8]
+;    inc qword [rsp-8]
+;    fild qword [rsp-8]
 ;    fdivp st1, st0
 ;
 ;    ret
@@ -163,15 +261,15 @@ sin_arccos:
 ; ##########
 ;get_shift_constant:
 ;    ;fld1
-;    ;mov qword [qword_tmp], rax
-;    ;fild qword [qword_tmp]
+;    ;mov qword [rsp-8], rax
+;    ;fild qword [rsp-8]
 ;    ;fdivp st1, st0
-;    ;mov qword [qword_tmp], 2
-;    ;fild qword [qword_tmp]
+;    ;mov qword [rsp-8], 2
+;    ;fild qword [rsp-8]
 ;    ;fdivp st1, st0
 ;
-;    mov dword [qword_tmp], __float32__(0.5)
-;    fld dword [qword_tmp]
+;    mov dword [rsp-8], __float32__(0.5)
+;    fld dword [rsp-8]
 ;
 ;    ret
 
