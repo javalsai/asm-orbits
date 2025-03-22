@@ -85,30 +85,30 @@ section .rodata
     ansi_homel: equ $ - ansi_home
 
 section .data
-    white_ansi_color: db 0x1b, "[1;39m"
-    blue_ansi_color: db 0x1b, "[1;34m"
-    yellow_ansi_color: db 0x1b, "[1;33m"
-    moon_body:
-        dd 25.0, 20.0, -1.0, -3.0
-        dq white_ansi_color
-        db 7
-        db 2
-        dw 10
-    earth_body:
-        dd 5.0, 5.0, 0.0, 0.0
-        dq blue_ansi_color
-        db 7
-        db 3
-        dw 100
-    sun_body:
-        dd 35.0, 25.0, 0.0, 0.0
-        dq yellow_ansi_color
-        db 7
-        db 7
-        dw 1000
+    %include "cfg-data.asm"
+    ; moon_body:
+    ;     dd 25.0, 20.0, -1.0, -3.0
+    ;     dq white_ansi_color
+    ;     db 7
+    ;     db 2
+    ;     dw 10
+    ; earth_body:
+    ;     dd 5.0, 5.0, 0.0, 0.0
+    ;     dq blue_ansi_color
+    ;     db 7
+    ;     db 3
+    ;     dw 100
+    ; sun_body:
+    ;     dd 35.0, 25.0, 0.0, 0.0
+    ;     dq yellow_ansi_color
+    ;     db 7
+    ;     db 7
+    ;     dw 1000
 
 section .text
     global _start
+
+%include "cfg.asm"
 
 mmove:
     mov sil, [rcx+rdx]
@@ -160,18 +160,19 @@ _start:
     ;mov rax, OS_PAUSE
     ;syscall
 
-    mov rdx, body_size
-    lea rbx, [bodies+body_size*0]
-    lea rcx, [sun_body]
-    call mmove
-    mov rdx, body_size
-    lea rbx, [bodies+body_size*1]
-    lea rcx, [earth_body]
-    call mmove
-    mov rdx, body_size
-    lea rbx, [bodies+body_size*2]
-    lea rcx, [moon_body]
-    call mmove
+    ; mov rdx, body_size
+    ; lea rbx, [bodies+body_size*0]
+    ; lea rcx, [sun_body]
+    ; call mmove
+    ; mov rdx, body_size
+    ; lea rbx, [bodies+body_size*1]
+    ; lea rcx, [earth_body]
+    ; call mmove
+    ; mov rdx, body_size
+    ; lea rbx, [bodies+body_size*2]
+    ; lea rcx, [moon_body]
+    ; call mmove
+    call init
 
     mov rax, OS_CLOCK_GETTIME
     mov rdi, CLOCK_MONOTONIC
@@ -179,7 +180,9 @@ _start:
     syscall
 
     .render_loop_start:
+        %ifdef SYNC_SEQUENCES
         call render_esu
+        %endif
 
         mov rax, OS_SCHED_YIELD
         syscall
@@ -199,7 +202,9 @@ _start:
         mov rcx, [rsp-16+timespec.tv_nsec]
         mov [rbp-24+timespec.tv_nsec], rcx
 
+        %ifdef SYNC_SEQUENCES
         call render_bsu
+        %endif
         call render_clear
 
         ; todo: print dt
@@ -243,7 +248,9 @@ _start:
         add qword [rbp-8], body_size
         jmp .render_loop
         .exitt:
+    %ifdef SYNC_SEQUENCES
     call render_esu
+    %endif
 
     ;call post_run
 
