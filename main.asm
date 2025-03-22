@@ -90,19 +90,22 @@ section .data
     yellow_ansi_color: db 0x1b, "[1;33m"
     moon_body:
         dd 25.0, 20.0, -1.0, -3.0
-        db 2, 10
         dq white_ansi_color
         db 7
+        db 2
+        dw 10
     earth_body:
-        dd 20.0, 20.0, 1.0, -3.0
-        db 3, 10
+        dd 5.0, 5.0, 0.0, 0.0
         dq blue_ansi_color
         db 7
+        db 3
+        dw 100
     sun_body:
-        dd 5.0, 7.0, 0.0, 0.0
-        db 7, 100
+        dd 35.0, 25.0, 0.0, 0.0
         dq yellow_ansi_color
         db 7
+        db 7
+        dw 1000
 
 section .text
     global _start
@@ -224,6 +227,19 @@ _start:
         mov rax, [rbp-8]
         mov rcx, qword [rbp-32]
         call body_rax_apply_speed_dt_rcx
+        lea rbx, [bodies]
+        .accel_loop:
+            cmp rax, rbx
+            je .accel_loop_next
+            mov rcx, [rbx+body.col]
+            test rcx, rcx
+            jz .accel_loop_tail
+            mov rcx, [rbp-32]
+            call body_rax_grav_to_rbx_dt_rcx
+            .accel_loop_next:
+            add rbx, body_size
+            jmp .accel_loop
+            .accel_loop_tail:
         add qword [rbp-8], body_size
         jmp .render_loop
         .exitt:

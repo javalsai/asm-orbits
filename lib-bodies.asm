@@ -3,10 +3,10 @@ struc body
     .pos_y   resd 1
     .vel_x   resd 1
     .vel_y   resd 1
-    .radius  resb 1
-    .mass    resb 1
     .col     resq 1
     .col_len resb 1
+    .radius  resb 1
+    .mass    resw 1
 endstruc
 ; body = {
 ;   0  f32     pox_x, (in "units (L)")
@@ -240,6 +240,75 @@ body_rax_apply_speed_dt_rcx:
     fld dword [rax+body.pos_y]
     faddp
     fstp dword [rax+body.pos_y]
+    ret
+
+body_rax_grav_to_rbx_dt_rcx:
+    fld dword [rbx+body.pos_x]
+    fld dword [rax+body.pos_x]
+    fsubp ; dx
+
+    fld dword [rbx+body.pos_y]
+    fld dword [rax+body.pos_y]
+    fsubp ; dy dx
+
+    fld st1  ;       dx    dy dx
+    fmul st0 ;       dx**2 dy dx
+    fld st1  ; dy    dx**2 dy dx
+    fmul st0 ; dy**2 dx**2 dy dx
+    faddp    ; dy**2+dx**2 dy dx
+
+    ; bcs distance (D) = sqrt(dx**2 + dy**2)
+    ; stack =  D**2 dy dx
+
+    ; ignoring G completely, (account for in the mass units itself)
+    ; so ugh, Fg = m1m2 / r**2
+    ; and F / m = a, so a = m2 / D2
+    ; and dv = a * dt, so dv = m2 dt / D2
+
+    mov qword [rsp-8], 1000000000
+    fild qword [rsp-8]
+    fmulp ; 1e9*D2 ...
+    mov qword [rsp-8], rcx
+    fild qword [rsp-8]
+    fdivrp ; rcx / (D2*1e9) = dt / D2 ...
+    fild word [rbx+body.mass]
+    fmulp ; [m dt / D2 = v] dy dx
+
+    ; and now we have v in st0
+    ; dvx = dv cosa
+    ; dvy = dv sina
+    ; and by triangles we know
+    ; sina = dy / dx
+    ; cosa = dx / dy
+    ; we only f up signs, but by thinking a lil
+    ; dvx = dv dx / |dy|
+    ; dvy = dv dy / |dx|
+    fld st1 ; dy
+    fabs
+    fld st3 ; was st2 (dx) before
+    fdivrp ; dx/|dy| dv dy dx
+    fmul st1 ; dvx dv dy dx
+    ; now we have dvx in st0, add to body vx and pop back until dv
+    fld dword [rax+body.vel_x]
+    faddp
+    fstp dword [rax+body.vel_x] ; dv dy dx
+    ; now for dvy = dv dy / |dx|
+    fld st2 ; dx
+    fabs
+    fld st2 ; was st1 (dy) before
+    fdivrp ; dy/|dx| dv dy dx
+    fmul st1 ; dvy dv dy dx
+    ; now we add it, same as before
+    fld dword [rax+body.vel_y]
+    faddp
+    fstp dword [rax+body.vel_y] ; dv dy dx
+    ; and we clear stack
+    fstp st1
+    fstp st0
+    fstp st0
+
+    ; fstp dword [rsp-8] ; distance
+
     ret
 
 ; aaaand, unnecessary cuz if done in the proper moment is
