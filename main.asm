@@ -7,6 +7,7 @@
 %define OS_SCHED_YIELD   24
 %define OS_PAUSE         34
 %define OS_EXIT          60
+%define OS_CLOCK_GETTIME 228
 
 %define SIG_SIGINT       2
 %define SIG_SIGSEGV      11
@@ -14,6 +15,8 @@
 
 %define SA_RESETHAND       0x80000000
 %define SA_RESTORER        0x04000000
+
+%define CLOCK_MONOTONIC  1
 
 %define O_RDONLY      0b000
 %define O_WRONLY      0b001
@@ -34,11 +37,9 @@
 ;%define NUM_PI  3.141592653578
 ;%define NUM_PI2 6.283185307156
 
-struc kernel_sigaction
-    .k_sa_handler    resq 1
-    .sa_flags        resb 8
-    .sa_restorer     resq 1
-    .sa_mask         resb 128 ; should be shorter but idk exactly, just null it out
+struc timespec
+    .tv_sec  resq 1
+    .tv_nsec resq 1
 endstruc
 
 section .bss
@@ -68,6 +69,9 @@ section .rodata
     seq_def: db 0x1b, "["
     seq_defl: equ $ - seq_def
 
+    str_fps_head: db 0x1b, "[HFPS: "
+    str_fps_headl: equ $ - str_fps_head
+
     ;ansi_erase_in_display: db 0x1b, "[2J"
     ansi_erase_in_display: db 0x1b, "c"
     ansi_erase_in_displayl: equ $ - ansi_erase_in_display
@@ -85,17 +89,17 @@ section .data
     blue_ansi_color: db 0x1b, "[1;34m"
     yellow_ansi_color: db 0x1b, "[1;33m"
     moon_body:
-        dd 20.0, 20.0, 10.0, 10.0
+        dd 25.0, 20.0, -1.0, -3.0
         db 2, 10
         dq white_ansi_color
         db 7
     earth_body:
-        dd 20.0, 20.0, 10.0, 10.0
+        dd 20.0, 20.0, 1.0, -3.0
         db 3, 10
         dq blue_ansi_color
         db 7
     sun_body:
-        dd 10.0, 10.0, 0.0, 0.0
+        dd 5.0, 7.0, 0.0, 0.0
         db 7, 100
         dq yellow_ansi_color
         db 7
@@ -104,20 +108,21 @@ section .text
     global _start
 
 mmove:
-    mov r10, [rcx+rax]
-    mov [rbx+rax], r10
-    inc rax
-    cmp rax, rdx
-    jne mmove
+    mov sil, [rcx+rdx]
+    mov [rbx+rdx], sil
+    dec rdx
+    test rdx, rdx
+    jnz mmove
     ret
 
 
 _start:
     push rbp
     mov rbp, rsp
-    sub rsp, 16
+    sub rsp, 32
     ; [rbp-8]:  body ptr
-    ; [rbp-16]: frame delta t
+    ; [rbp-24] (2QW): last frame time timespec
+    ; [rbp-32]: frame delta t
 
     ;call pre_run
 
@@ -134,56 +139,79 @@ _start:
     mov qword [ksigact+kernel_sigaction.k_sa_handler], rax
     lea rax, [sa_restorer]
     mov qword [ksigact+kernel_sigaction.sa_restorer], rax
-    mov rax, SA_RESTORER
-    or qword [ksigact+kernel_sigaction.sa_flags], rax
+    or qword [ksigact+kernel_sigaction.sa_flags], SA_RESTORER
     ;mov rax, SA_RESETHAND
     ;or qword [ksigact+kernel_sigaction.sa_flags], rax
 
-    ; todo: iter or smth
-    mov rax, OS_RT_SIGACTION
+    ; todo: iter or smth + all signals & error handle
+    lea rax, [ksigact]
     mov rdi, SIG_SIGTERM
-    lea rsi, [ksigact]
-    mov rdx, 0
-    mov r10, 8
-    syscall
-    mov rax, OS_RT_SIGACTION
+    call set_signal_rdi_sigact_rax
+    lea rax, [ksigact]
     mov rdi, SIG_SIGINT
-    lea rsi, [ksigact]
-    mov rdx, 0
-    mov r10, 8
-    syscall
-    mov rax, OS_RT_SIGACTION
+    call set_signal_rdi_sigact_rax
+    lea rax, [ksigact]
     mov rdi, SIG_SIGSEGV
-    lea rsi, [ksigact]
-    mov rdx, 0
-    mov r10, 8
-    syscall
+    call set_signal_rdi_sigact_rax
 
     ;mov rax, OS_PAUSE
     ;syscall
 
-    mov rax, 0
     mov rdx, body_size
     lea rbx, [bodies+body_size*0]
     lea rcx, [sun_body]
     call mmove
-    mov rax, 0
     mov rdx, body_size
     lea rbx, [bodies+body_size*1]
     lea rcx, [earth_body]
     call mmove
-    mov rax, 0
     mov rdx, body_size
     lea rbx, [bodies+body_size*2]
     lea rcx, [moon_body]
     call mmove
 
+    mov rax, OS_CLOCK_GETTIME
+    mov rdi, CLOCK_MONOTONIC
+    lea rsi, [rbp-24]
+    syscall
+
     .render_loop_start:
         call render_esu
+
         mov rax, OS_SCHED_YIELD
         syscall
+        mov rax, OS_CLOCK_GETTIME
+        mov rdi, CLOCK_MONOTONIC
+        lea rsi, [rsp-16]
+        syscall
+        mov rax, qword [rsp-16+timespec.tv_sec]
+        sub rax, qword [rbp-24+timespec.tv_sec]
+        mov rdx, 1000000000
+        imul rdx ; result in rdx:rax, but not that big
+        add rax, qword [rsp-16+timespec.tv_nsec]
+        sub rax, qword [rbp-24+timespec.tv_nsec]
+        mov [rbp-32], rax
+        mov rcx, [rsp-16+timespec.tv_sec]
+        mov [rbp-24+timespec.tv_sec], rcx
+        mov rcx, [rsp-16+timespec.tv_nsec]
+        mov [rbp-24+timespec.tv_nsec], rcx
+
         call render_bsu
         call render_clear
+
+        ; todo: print dt
+        mov rax, OS_WRITE
+        mov rdi, FD_STDOUT
+        lea rsi, [str_fps_head]
+        mov rdx, str_fps_headl
+        syscall
+        ; this just 1e12 / n, giving fps basically
+        xor rdx, rdx
+        mov rcx, [rbp-32]
+        mov rax, 1000000000
+        div rcx
+        mov rcx, 10
+        call print_rax_radix_rcx
 
         lea rax, [bodies]
         mov [rbp-8], rax
@@ -193,16 +221,13 @@ _start:
         test rbx, rbx
         jz .render_loop_start
         call print_body
+        mov rax, [rbp-8]
+        mov rcx, qword [rbp-32]
+        call body_rax_apply_speed_dt_rcx
         add qword [rbp-8], body_size
         jmp .render_loop
+        .exitt:
     call render_esu
-
-    mov rax, sun_body
-    call print_body
-    mov rax, earth_body
-    call print_body
-    mov rax, moon_body
-    call print_body
 
     ;call post_run
 
@@ -224,16 +249,6 @@ sa_handler:
     mov rax, OS_EXIT
     mov rdi, 0
     syscall
-    ret
-
-; void (*_)(void)
-; in x86_64 this is more complex
-; but idk where
-; ```c
-; extern void restore_rt (void) asm ("__restore_rt") attribute_hidden;
-; ```
-; goes, soooo...., plus not linking against glibc which is where that likely links to
-sa_restorer:
     ret
 
 pre_run:

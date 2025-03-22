@@ -68,10 +68,18 @@ print_body:
         sub r10, r11
 
         mov rax, [rbp-8]
-        mov rdi, qword [rax+body.pos_y] ; also loads pos_x
+        mov rdi, qword [rax+body.pos_x] ; also loads pos_y
+        ; radius correction {{{
+        mov dl, [rax+body.radius]
+        xor rax, rax
+        mov al, dl
+        shr al, 1
+        ; }}}
         mov rsi, r15 ; v offset
         sub rsi, r9  ; v offset
+        sub rsi, rax ; radius correction
         mov rdx, r10 ; h offset
+        sub rsi, rax ; radius correction
         call go_pos_rdi2f_ln_rsi_col_rdx
 
         pop r10
@@ -193,52 +201,62 @@ print_rax_radix_rcx:
     pop rbp
     ret
 
-; iterating through lines of a 3 long body would do
-; 1/3, 2/3, 3/3; which aren't vercailly "even", starts
-; at 0.3333 and ends with 1, which would render an empty line
-; we instead want 0.25, 0.50, 0.75, leaving both edges out
-; and this is as simple as multiplying by n/(n + 1) (where n
-; is simly the amount of lines)
+; IVE BEEN THINKING BOUT YOU WAY TOO MUCH
+; I TRIED TO STOP IT BUT ITS HARD TO STOP THE RUSHH
+; OF ALL THE ATTENTION, THE MESSAGES
+; I TRIED TO KEEP IT IN MY HEAD
+; BUT NOOW I THINK I HAVEE A LITTLEEE CRUSH
 ;
-; rax: of number
+; WAIT
+;
+; MAYBE ITS NOT JUST MEEE MAYBE YOURE THINKING THE SAMEE
+; NOW THAT I THINK BACK THAT THOUGHT DOESNT EVEN SEEM THAT INSANEE
+; WELL I THINK IT DOESNT MAYBEEE CUZ U TEXT ME EVERY DAYYY
+; AND WHEN WE'RE TOGETHER WITH FRIENDS YOU SEEM TO TREAT ME DIFFERENTLYYY
+body_rax_apply_speed_dt_rcx:
+    fld dword [rax+body.vel_x]
+    mov qword [rsp-8], rcx
+    fild qword [rsp-8]
+    fmulp
 
-;get_normalization_ratio:
-;    mov qword [rsp-8], rax
-;    fild qword [rsp-8]
-;    inc qword [rsp-8]
-;    fild qword [rsp-8]
-;    fdivp st1, st0
-;
-;    ret
+    mov qword [rsp-8], 1000000000
+    fild qword [rsp-8]
+    fdivp
 
-; OR, we can shift everything half a unit under, like
-; 1/3, 2/3, 3/3 -> 1/3 - 1/6, 2/3 - 1/6, 3/3 - 1/6 =
-; 0.3, 0.6, 1   -> 0.1666666, 0.5,       0.8333333
-; and instead of looking like (doing a staircase)
-; ####
-; ########
-; ############
-; or
-; ###
-; ######
-; #########
-; looks like
-; ##
-; ######
-; ##########
-;get_shift_constant:
-;    ;fld1
-;    ;mov qword [rsp-8], rax
-;    ;fild qword [rsp-8]
-;    ;fdivp st1, st0
-;    ;mov qword [rsp-8], 2
-;    ;fild qword [rsp-8]
-;    ;fdivp st1, st0
-;
-;    mov dword [rsp-8], __float32__(0.5)
-;    fld dword [rsp-8]
-;
-;    ret
+    fld dword [rax+body.pos_x]
+    faddp
+    fstp dword [rax+body.pos_x]
+
+
+    fld dword [rax+body.vel_y]
+    mov qword [rsp-8], rcx
+    fild qword [rsp-8]
+    fmulp
+
+    mov qword [rsp-8], 1000000000
+    fild qword [rsp-8]
+    fdivp
+
+    fld dword [rax+body.pos_y]
+    faddp
+    fstp dword [rax+body.pos_y]
+    ret
 
 ; aaaand, unnecessary cuz if done in the proper moment is
 ; just substracting 1/2 every time
+
+
+; I WANT TO BOY YOU SMTH
+; BUT I DONT HAVE ANY MONEYYYYYYYYY
+; NO I DONT HAVE ANY MONEYYY
+;
+; I WANT TO BOY YOU SMTHHH
+; NO I DONT HAVE AN MONEY, NO I DONT HAVE MONEY
+; ....
+; HMMHMMMHHHH
+; ...
+; AH AHAHA HAHHHHHAHHHH
+; AHUAHUAHAHHAHAHUAHAHHUHH
+; AHMMMHAMAHMAHMAMMMM
+; HA
+; HAMNMNMNMNMNMHAAMNAMNMNMMANAHANMNM
