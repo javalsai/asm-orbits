@@ -6,6 +6,7 @@
 %define OS_RT_SIGACTION  13
 %define OS_SCHED_YIELD   24
 %define OS_PAUSE         34
+%define OS_NANOSLEEP     35
 %define OS_EXIT          60
 %define OS_CLOCK_GETTIME 228
 
@@ -45,6 +46,7 @@ endstruc
 section .bss
     bodies: resb body_size * 256 ; [body]
     ksigact: resb kernel_sigaction_size
+    frame_sleep: resb timespec_size
 
 section .rodata
     ONE: dq 1
@@ -184,7 +186,9 @@ _start:
         call render_esu
         %endif
 
-        mov rax, OS_SCHED_YIELD
+        mov rax, OS_NANOSLEEP
+        lea rdi, [frame_sleep]
+        mov rsi, 0
         syscall
         mov rax, OS_CLOCK_GETTIME
         mov rdi, CLOCK_MONOTONIC
@@ -267,7 +271,9 @@ _start:
 sa_handler:
     ;call render_clear
     ;call render_home
+    %ifdef SYNC_SEQUENCES
     call render_esu
+    %endif
 
     mov rax, OS_EXIT
     mov rdi, 0

@@ -3,7 +3,6 @@
 ;  - velocity = block / s
 ;  - mass     = 1 / (s**2 * block) | (if i did algebra properly)
 
-%define NSEC_SLEEP 1000000
 ; %define SYNC_SEQUENCES
 
 ; do NEVER put 2 bodies on the same x or y coords
@@ -11,6 +10,9 @@
 ; just pray IEEE754 huge decimal precision always has some error
 ; and don't make them match at some frame
 init:
+    mov qword [frame_sleep+timespec.tv_sec], 0
+    mov qword [frame_sleep+timespec.tv_nsec], 100000000
+
     mov dword [bodies+body.pos_x+(body_size*0)], __float32__(50.0)
     mov dword [bodies+body.pos_y+(body_size*0)], __float32__(25.0)
     mov dword [bodies+body.vel_x+(body_size*0)], __float32__(0.0)
